@@ -1,19 +1,35 @@
 import numpy as np
 from boop import Boop
+# from boop_2d import Boop
 from bms import BiasedMaxSearcher, biasedEvaluate
 from gameutil import elaborateState, countEndChild
 import time
 
+boardDisplay = None
+
+boardDisplay = """ _ _ _ _ _ _ 
+| |o| | | | |
+| | | | | | |
+| | | |x| | |
+| |x| | | |x|
+| | | |o| | |
+| | | | |o| |
+ T T T T T T
+P0: K5 C0
+P1: K5 C0
+Current player: 1
+Place"""
+
 # boardDisplay = """ _ _ _ _ _ _ 
 # | | | | | | |
+# | | | | |O| |
 # | | | | | | |
-# | | | | | | |
-# | | | |o| | |
-# | | | | | | |
+# | | |O| |O| |
+# | | | | | |x|
 # | | | | | | |
 #  T T T T T T
-# P0: K7 C0
-# P1: K8 C0
+# P0: K3 C3
+# P1: K3 C3
 # Current player: 1
 # Place"""
 
@@ -30,18 +46,18 @@ import time
 # Current player: 1
 # Place"""
 
-boardDisplay = """ _ _ _ _ _ _ 
-|O| | | | |O|
-| | | |O| | |
-| | | | | |O|
-| |O| | | | |
-| | | | | | |
-| | |O| |O| |
- T T T T T T
-P0: K3 C3
-P1: K3 C3
-Current player: 1
-Place"""
+# boardDisplay = """ _ _ _ _ _ _ 
+# |O| | | | |O|
+# | | | |O| | |
+# | | | | | |O|
+# | |O| | | | |
+# | | | | | | |
+# | | |O| |O| |
+#  T T T T T T
+# P0: K3 C3
+# P1: K3 C3
+# Current player: 1
+# Place"""
 
 # Place"""
 # Promotion"""
@@ -51,20 +67,20 @@ def main():
 
     ts = time.time()
 
-    print(f"{game.checkImmediatelyWin()}")
-    for _ in range(100000):
-        game.checkImmediatelyWin()
+    # print(f"{Boop.describeMove(game.checkImmediatelyWin())}")
+    # for _ in range(100000):
+    #     game.checkImmediatelyWin()
     
-    # evaluation = BiasedMaxSearcher(game).evaluateMoves(depth=3, traceChildren=True, parallel=True)
+    evaluation = BiasedMaxSearcher(game, max_workers=16).evaluateMoves(depth=3, traceChildren=True, parallel=True)
 
     print(f"time: {time.time() - ts}")
 
-    # print(f"move {evaluation.bestMove}")
-    # if evaluation.children:
-    #     elaborateState(game, evaluation)
-    #     print(f"score:{evaluation.scores} be:{biasedEvaluate(game, evaluation.scores)}")
-    #     endChildCount = countEndChild(evaluation)
-    #     print(f"endChildCount:{endChildCount}")
+    print(f"move {evaluation.bestMove}")
+    if evaluation.children:
+        elaborateState(game, evaluation)
+        print(f"score:{evaluation.scores} be:{biasedEvaluate(game, evaluation.scores)}")
+        endChildCount = countEndChild(evaluation)
+        print(f"endChildCount:{endChildCount}")
     
     # print("======================")
     # print("======================")

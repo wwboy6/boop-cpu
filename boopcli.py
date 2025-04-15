@@ -27,13 +27,14 @@ class BoopCLI:
                     print("Invalid size or no pieces available!")
                     continue
                 
-                y = int(input(f"Enter column (0-{Boop.boardSize-1}): "))
                 x = int(input(f"Enter row (0-{Boop.boardSize-1}): "))
-                if self.game.isOutOfBoard((x, y)) or tuple(self.game.board[x, y]) != Boop.stateEmpty:
+                y = int(input(f"Enter column (0-{Boop.boardSize-1}): "))
+                posI = Boop.posToIndex(x, y)
+                if self.game.isOutOfBoard(x, y) or self.game.board[posI] != Boop.stateEmpty:
                     print("Invalid position or space occupied!")
                     continue
                 
-                return ("playCat", (x, y, int(size)))
+                return ("playCat", (posI, int(size)))
             except ValueError:
                 print("Please enter valid numbers!")
 

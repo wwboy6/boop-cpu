@@ -18,7 +18,8 @@ def boop_setup(cls):
                 if all(0 <= pos[0] < cls.boardSize and 0 <= pos[1] < cls.boardSize for pos in connection):
                     connections.append(tuple(connection))
     connections = np.array(connections, dtype="int")
-    cls.allPositions = [i for i in range(cls.boardSize * cls.boardSize)]
+    cls.connections = connections
+    cls.allPositions = [(x, y) for x in range(cls.boardSize) for y in range(cls.boardSize)]
     # for checking if player can immediately win
     # data structure [[2d_pos0, 2d_pos1, ...], [2d_empty_pos0, 2d_empty_pos1, ...], 2d_win_pos]
     # the immediate winning loggic would check if all 2d_pos has current player's cats,
@@ -27,10 +28,10 @@ def boop_setup(cls):
     # win by 2 nearby cats with an available spot
     wpp = [[[c[0], c[1]], [], c[2]] for c in connections]
     if __name__ == "__main__": print(f"wpp {wpp[0]}")
-    winningPatterns = wpp
+    cls.winningPatterns = wpp
     wpp = [[[c[1], c[2]], [], c[0]] for c in connections]
     if __name__ == "__main__": print(f"wpp {wpp[0]}")
-    winningPatterns.extend(wpp)
+    cls.winningPatterns.extend(wpp)
     # win by 2 cats in a single connection (not nearby), with a cat next to the middle spot, and an available spot to push that cat into it
     # direction from middle to third cat is perpendicular with the connection
     # mirror the direction of the connection along x=y => flip(c1-c0)
@@ -38,17 +39,14 @@ def boop_setup(cls):
     extractMiddle = [[[c[0], c[2]], c[1], np.flip(c[1] - c[0]) * [-1, 1]] for c in connections]
     extractMiddle.extend([[[c[0], c[2]], c[1], np.flip(c[1] - c[0]) * [1, -1]] for c in connections])
     wpp = [[[*em[0], em[1]+em[2]], [em[1]], em[1]+em[2]+em[2]] for em in extractMiddle]
-    wpp = [p for p in wpp if not cls.isOutOfBoard(*p[2])]
+    wpp = [p for p in wpp if not cls.isOutOfBoard(p[2])]
     if __name__ == "__main__": print(f"wpp {wpp[0]}, len {len(wpp)}")
-    winningPatterns.extend(wpp)
-    if __name__ == "__main__": print(f"wp count {len(winningPatterns)}")
-    # convert those data into 1d array index system
-    cls.connections = [cls.posAToIndexA(conn) for conn in connections]
-    cls.winningPatterns = [[cls.posAToIndexA(wp[0]), cls.posAToIndexA(wp[1]), cls.posToIndex(*wp[2])] for wp in winningPatterns]
+    cls.winningPatterns.extend(wpp)
+    if __name__ == "__main__": print(f"wp count {len(cls.winningPatterns)}")
     # winningPatterns would be indexed by first element of pos (2d_pos0) as winningPatternMap
     cls.winningPatternMap = dict()
     for p in cls.winningPatterns:
-        pos0 = p[0][0]
+        pos0 = tuple(p[0][0])
         if not pos0 in cls.winningPatternMap:
             cls.winningPatternMap[pos0] = [p]
         else:
@@ -58,36 +56,20 @@ def boop_setup(cls):
 @boop_setup
 class Boop:
     boardSize = 6
-    # stateKitten0 = 0  # Player 0, kitten
-    # stateCat0 = 1     # Player 0, cat
-    # stateKitten1 = 2  # Player 1, kitten
-    # stateCat1 = 3     # Player 1, cat
-    stateEmpty = 4
-    stateDisplays = np.array(["o", "O", "x", "X", " "])
+    stateEmpty = (2, 2)
+    stateDisplays = np.array((("o", "O", "-"), ("x", "X", "-"), ("-", "-", " ")))
     connectionLength = 3
     initPieceCount = 8
-    # Adjacent offsets for booping (excluding 0,0), corresponding to [-1,-1] to [1,1]
-    adjacentOffsets = [-7, -6, -5, -1, 1, 5, 6, 7]
 
     class PlayerState(Enum):
         PLAY_CAT = 0
         PROMOTE_CAT = 1
         FINISHED = 2
+
     @classmethod
-    def isOutOfBoard(cls, x, y):
+    def isOutOfBoard(cls, pos):
+        x, y = pos
         return x < 0 or x >= cls.boardSize or y < 0 or y >= cls.boardSize
-    
-    @classmethod
-    def posToIndex(cls, x, y):
-        return x * cls.boardSize + y
-    
-    @classmethod
-    def posAToIndexA(cls, posA):
-        return [cls.posToIndex(*pos) for pos in posA]
-    
-    @classmethod
-    def indexToPos(cls, index):
-        return (index // cls.boardSize, index % cls.boardSize)
 
     class Player:
         def __init__(self, player=None):
@@ -119,20 +101,17 @@ class Boop:
         self.playerState = Boop.PlayerState.PLAY_CAT
         self.immediatelyWinningMove = None
         if saveStr == None:
-            self.board = np.full(self.boardSize * self.boardSize, self.stateEmpty, dtype="int8")
+            self.board = np.full((self.boardSize, self.boardSize, 2), 2, dtype="int8")
             self.currentPlayer = 0
-            self.empty_spaces = list(range(self.boardSize * self.boardSize))
+            self.empty_spaces = list(Boop.allPositions)
         else:
             # load save
-            sdl = list(self.stateDisplays)
+            sdl = list(self.stateDisplays.reshape((-1,)))
             lines = saveStr.split('\n')
             # parse map
             mapStr = [line.split('|')[1:7] for line in lines[1:7]]
-            board = []
-            for row in mapStr:
-                for v in row:
-                    board.append(sdl.index(v))
-            self.board = np.array(board, dtype="int8")
+            indexes = [[sdl.index(v) for v in line] for line in mapStr]
+            self.board = np.array([[[ind//3, ind%3] for ind in line] for line in indexes])
             # parse tokens
             self.players[0].catCounts = [int(str) for str in re.findall(r"\d", lines[8])[1:3]]
             self.players[1].catCounts = [int(str) for str in re.findall(r"\d", lines[9])[1:3]]
@@ -146,62 +125,55 @@ class Boop:
                     # compute promotionOptions
                     self.promotionOptions = self.getPromotionOptions()
             # compute empty_space
-            self.empty_spaces = [i for i in range(self.boardSize * self.boardSize) if self.board[i] == self.stateEmpty]
+            self.empty_spaces = [pos for pos in Boop.allPositions if np.all(self.board[*pos] == self.stateEmpty)]
 
     def getPromotionOptions(self):
         allOptions = []
         player = self.players[self.currentPlayer]
-        # if all pieces are placed on board, 1 kitten can be promoted 
-        playerKitten = self.currentPlayer * 2
         if player.catCounts == [0, 0]:
-            allOptions.extend([(i,) for i in self.allPositions if self.board[i] == playerKitten])
-        # check if any pieces form line
+            allOptions.extend([(pos,) for pos in self.allPositions if self.board[pos][0] == self.currentPlayer and self.board[pos][1] == 0])
         for conn in self.connections:
-            if all(self.board[pos] // 2 == self.currentPlayer for pos in conn):
+            if all(self.board[pos[0], pos[1]][0] == self.currentPlayer for pos in conn):
                 allOptions.append(tuple(conn))
         return allOptions
 
     def getWinningConnections(self):
-        playerCat = self.currentPlayer * 2 + 1
-        bcPositions = [i for i in self.allPositions if self.board[i] == playerCat]
+        bcPositions = [(x, y) for x in range(self.boardSize) for y in range(self.boardSize) 
+                       if self.board[x, y][0] == self.currentPlayer and self.board[x, y][1] == 1]
         if len(bcPositions) == self.initPieceCount:
             self.winningPieces = np.array(bcPositions)
         for conn in self.connections:
-            if all(self.board[pos] == playerCat for pos in conn):
+            if all(np.all(self.board[pos[0], pos[1]] == [self.currentPlayer, 1]) for pos in conn):
                 self.winningPieces = np.unique(conn, axis=0)
         return self.winningPieces
 
-    def playCat(self, idx, isBig):
+    def playCat(self, x, y, isBig):
         # TODO: prohibit move that produce same game state as before ??
         player = self.players[self.currentPlayer]
-        piece = self.currentPlayer * 2 + isBig
         player.catCounts[isBig] -= 1
-        self.empty_spaces.remove(idx)
-        self.board[idx] = piece
-
-        x, y = self.indexToPos(idx)
+        self.empty_spaces.remove((x, y))
+        self.board[x, y] = (self.currentPlayer, isBig)
+        
         for dx in range(-1, 2):
             for dy in range(-1, 2):
                 if dx == 0 and dy == 0:
                     continue
                 tx, ty = x + dx, y + dy
-                if self.isOutOfBoard(tx, ty):
+                if self.isOutOfBoard((tx, ty)):
                     continue
-                tidx = self.posToIndex(tx, ty)
-                target = self.board[tidx]
-                if target == self.stateEmpty or target % 2 > isBig:
+                target = self.board[tx, ty]
+                if target[0] == 2 or target[1] > isBig:
                     continue
                 nx, ny = tx + dx, ty + dy
-                if self.isOutOfBoard(nx, ny):
-                    self.players[target // 2].catCounts[target % 2] += 1
-                    self.board[tidx] = self.stateEmpty
-                    self.empty_spaces.append(tidx)
-                elif self.board[self.posToIndex(nx, ny)] == self.stateEmpty:
-                    nidx = self.posToIndex(nx, ny)
-                    self.board[nidx] = target
-                    self.board[tidx] = self.stateEmpty
-                    self.empty_spaces.remove(nidx)
-                    self.empty_spaces.append(tidx)
+                if self.isOutOfBoard((nx, ny)):
+                    self.players[target[0]].catCounts[target[1]] += 1
+                    self.board[tx, ty] = self.stateEmpty
+                    self.empty_spaces.append((tx, ty))
+                elif self.board[nx, ny][0] == 2:
+                    self.board[nx, ny] = target
+                    self.board[tx, ty] = self.stateEmpty
+                    self.empty_spaces.remove((nx, ny))
+                    self.empty_spaces.append((tx, ty))
         self.checkNextState()
 
     def checkNextState(self):
@@ -217,16 +189,16 @@ class Boop:
 
     def promote(self, index):
         for pos in self.promotionOptions[index]:
-            self.board[pos] = self.stateEmpty
-            self.empty_spaces.append(pos)
+            self.board[*pos] = self.stateEmpty
+            self.empty_spaces.append(tuple(pos))
         self.players[self.currentPlayer].catCounts[1] += len(self.promotionOptions[index])
         self.currentPlayer = 1 - self.currentPlayer
         self.playerState = Boop.PlayerState.PLAY_CAT
 
     def displayBoardState(self):
         result = " _ _ _ _ _ _ \n"
-        for i in range(0, self.boardSize * self.boardSize, self.boardSize):
-            line = "|".join(self.stateDisplays[self.board[i + j]] for j in range(self.boardSize))
+        for row in self.board:
+            line = "|".join([self.stateDisplays[*state] for state in row])
             result += f"|{line}|\n"
         result += " T T T T T T "
         return result
@@ -254,56 +226,50 @@ class Boop:
         # return cache if any
         if self.immediatelyWinningMove != None: return self.immediatelyWinningMove
         # filter pattern
-        playerCat = self.currentPlayer * 2 + 1
+        currentPlayerCat = (self.currentPlayer, 1)
         # find pattern with matching cat
         pattern = None
         # search for cat and find potential patterns in winningPatternMap
         # TODO: loop with self.winningPatternMap key only
-        for pos in [i for i in self.allPositions if self.board[i] == playerCat]:
+        for pos in [pos for pos in self.allPositions if np.all(self.board[*pos] == currentPlayerCat)]:
             patterns = self.winningPatternMap.get(pos, [])
             for p in patterns:
                 nextPattern = False
                 for pos in p[0]:
-                    if self.board[pos] != playerCat:
+                    if not np.all(self.board[*pos] == currentPlayerCat):
                         nextPattern = True
                         break
                 if nextPattern: continue
                 for pos in p[1]:
-                    if self.board[pos] != self.stateEmpty:
+                    if not np.all(self.board[*pos] == self.stateEmpty):
                         nextPattern = True
                         break
                 if nextPattern: continue
-                if self.board[p[2]] != self.stateEmpty: continue
+                if not np.all(self.board[*p[2]] == self.stateEmpty): continue
                 pattern = p
                 break
+                # if np.all([np.all(self.board[*pos] == currentPlayerCat) for pos in p[0]]) and np.all([np.all(self.board[*pos] == self.stateEmpty) for pos in [*p[1], p[2]]]):
+                #     pattern = p
+                #     break
             if pattern: break
         if pattern:
-            self.immediatelyWinningMove = ("playCat", [pattern[2], 1])
+            self.immediatelyWinningMove = ("playCat", [*pattern[2], 1])
         return self.immediatelyWinningMove
 
     def getPossibleMoves(self) -> list:
-        # TODO: prioritize moves
+        # TODO: pioritize moves
         if self.playerState == Boop.PlayerState.PLAY_CAT:
             player = self.players[self.currentPlayer]
             moves = []
             if player.catCounts[0]:
-                moves.extend(("playCat", (i, 0)) for i in self.empty_spaces)
+                moves.extend(("playCat", (x, y, 0)) for x, y in self.empty_spaces)
             if player.catCounts[1]:
-                moves.extend(("playCat", (i, 1)) for i in self.empty_spaces)
+                moves.extend(("playCat", (x, y, 1)) for x, y in self.empty_spaces)
             return moves
         elif self.playerState == Boop.PlayerState.PROMOTE_CAT:
             return [("promoteCat", i) for i in range(len(self.promotionOptions))]
         # TODO: prohibit move that produce same game state as before ??
         return []
-
-    @classmethod
-    def describeMove(cls, move):
-        if move is None: return None
-        match(move[0]):
-            case 'playCat':
-                return [move[0], [*cls.indexToPos(move[1][0]), move[1][1]]]
-            case _:
-                return move
     
     # this is faster than copy.deepcopy
     def copy(self) -> 'Boop':
@@ -336,7 +302,7 @@ class Boop:
         [1, 3, 4, 4, 3, 1],
         [1, 2, 3, 3, 2, 1],
         [0, 1, 1, 1, 1, 0],
-    ], dtype="int").flatten()
+    ], dtype="int")
     evalScoreBoardPieceBonusesMul = [1, 2] # score gain of placing kitten in the center is more than placing cat
     # set a large value for winning
     evalScoreWin = (evalScoreBoardCat * (initPieceCount - 1) + 2*16 + evalScoreReserveCat) * 2
@@ -350,25 +316,27 @@ class Boop:
         # FIXME: this approach is to check checkImmediatelyWin on evaluatePlayer only to avoid doing this in every step of searching
         # test if checking this in every step would have a better performance
         if self.checkImmediatelyWin() != None:
-            return self.evalScoreWin if self.currentPlayer == playerIndex else self.evalScoreLose
+            if self.currentPlayer == playerIndex: return self.evalScoreWin
+            else: return self.evalScoreLose
         score = 0
         # if the next move is to promote, increase score by promotion
         if self.currentPlayer == playerIndex:
             match self.playerState:
                 case self.PlayerState.PROMOTE_CAT:
                     # find all possible promotion and add the highest score that can be increased
-                    playerKitten = playerIndex * 2
-                    kittenCountInOption = [sum(1 for p in opt if self.board[p] == playerKitten) for opt in self.promotionOptions]
-                    maxCount = np.max(kittenCountInOption) if kittenCountInOption else 0
-                    scoreIncreasment = max(0, maxCount*(self.evalScoreReserveCat-self.evalScoreBoardKitten)-(3-maxCount)*(self.evalScoreBoardCat))
+                    playerKitten = (playerIndex, 0)
+                    kittenCountInOption = [len([p for p in opt if np.all(self.board[*p] == playerKitten)]) for opt in self.promotionOptions]
+                    maxCount = np.max(kittenCountInOption)
+                    scoreIncreasment = np.max([0, maxCount*(self.evalScoreReserveCat-self.evalScoreBoardKitten)-(3-maxCount)*(self.evalScoreBoardCat)])
                     score += scoreIncreasment
 
         player = self.players[playerIndex]
         rk, rc = player.catCounts
         score += rk * self.evalScoreReserveKitten + rc * self.evalScoreReserveCat
-        for i in range(self.boardSize * self.boardSize):
-            piece = self.board[i]
-            if piece // 2 == playerIndex:
-                base = self.evalScoreBoardKitten if piece % 2 == 0 else self.evalScoreBoardCat
-                score += base + self.evalScoreBoardPieceBonuses[i] * self.evalScoreBoardPieceBonusesMul[piece % 2]
+        for x in range(self.boardSize):
+            for y in range(self.boardSize):
+                piece = self.board[x, y]
+                if piece[0] == playerIndex:
+                    base = self.evalScoreBoardKitten if piece[1] == 0 else self.evalScoreBoardCat
+                    score += base + self.evalScoreBoardPieceBonuses[x, y] * self.evalScoreBoardPieceBonusesMul[piece[1]]
         return score
