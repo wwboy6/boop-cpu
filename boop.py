@@ -63,7 +63,7 @@ class Boop:
     # stateKitten1 = 2  # Player 1, kitten
     # stateCat1 = 3     # Player 1, cat
     stateEmpty = 4
-    stateDisplays = np.array(["o", "O", "x", "X", " "])
+    stateDisplays = np.array(["o", "O", "x", "X", "_"])
     connectionLength = 3
     initPieceCount = 8
     # Adjacent offsets for booping (excluding 0,0), corresponding to [-1,-1] to [1,1]
@@ -118,6 +118,7 @@ class Boop:
         self.winningPieces = np.array([])
         self.playerState = Boop.PlayerState.PLAY_CAT
         self.immediatelyWinningMove = None
+        self.lastMove = None
         if saveStr == None:
             self.board = np.full(self.boardSize * self.boardSize, self.stateEmpty, dtype="int8")
             self.currentPlayer = 0

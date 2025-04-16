@@ -6,24 +6,24 @@ from gameutil import elaborateState
 
 boardDisplay = None
 
-# boardDisplay = """ _ _ _ _ _ _
-# | |x| | | | |
-# |x| |x|x|o|o|
-# | | | | | | |
-# |x| |x| |o| |
-# | | | | | | |
-# | | | |o| | |
-#  T T T T T T
-# P0: K2 C3
-# P1: K1 C0
-# Current player: 1
-# Place"""
+boardDisplay = """ _ _ _ _ _ _
+|O|x|_|_|_|X|
+|_|_|_|_|O|_|
+|_|_|X|_|_|_|
+|X|_|_|_|_|_|
+|_|_|O|_|_|_|
+|_|_|_|_|_|_|
+ T T T T T T
+P0: K1 C4
+P1: K0 C4
+Current player: 1
+Place"""
 
 def main():
     game = Boop(boardDisplay)
     def aiMove(game):
         ts = time.time()
-        evaluation = BiasedMaxSearcher(game, max_workers=16).evaluateMoves(depth=3, traceChildren=True, parallel=True)
+        evaluation = BiasedMaxSearcher(game, max_workers=16).evaluateMoves(depth=4, traceChildren=True, parallel=True)
         if evaluation.children: # evaluation.children may not exist for shortcut
             print(f"vvvvvvvvvvvvvvvvvvvv")
             print(f"origin game state")

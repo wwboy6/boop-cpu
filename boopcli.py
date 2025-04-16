@@ -1,4 +1,5 @@
 from boop import Boop
+from bcolors import bcolors
 
 class BoopCLI:
     def __init__(self, game, hasBot = True, aiMove = None):
@@ -53,6 +54,23 @@ class BoopCLI:
                 print("Invalid option!")
             except ValueError:
                 print("Please enter a valid number!")
+    
+    def displayPiece(self, boardIndex, lastMove, lastBoard):
+        str = self.game.stateDisplays[self.game.board[boardIndex]]
+        isCurrent = lastMove is not None and lastMove[0] == 'playCat' and boardIndex == lastMove[1][0]
+        isDifferent = lastBoard is not None and self.game.board[boardIndex] != lastBoard[boardIndex]
+        return f"{bcolors.OKGREEN}{str}{bcolors.ENDC}" if isCurrent else f"{bcolors.OKBLUE}{str}{bcolors.ENDC}" if isDifferent else str
+    
+    def displayGameState(self, lastMove=None, lastBoard=None):
+        # TODO: compare new game state with previous one
+        displayString = " _ _ _ _ _ _ \n"
+        for i in range(0, self.game.boardSize * self.game.boardSize, self.game.boardSize):
+            textArr = [self.displayPiece(i+j, lastMove, lastBoard) for j in range(self.game.boardSize)]
+            line = "|".join(textArr)
+            displayString += f"|{line}|\n"
+        displayString += " T T T T T T "
+        displayString += "\n" + "\n".join([f"P{i}: K{p.catCounts[0]} C{p.catCounts[1]}" for i, p in enumerate(self.game.players)])
+        print(displayString)
 
     def play(self):
         """Runs a simple game loop for user interaction."""
@@ -68,17 +86,20 @@ class BoopCLI:
                 (True)
             )
         print("\n")
+        # print(self.game.displayGameState())
+        self.displayGameState()
         while not self.game.isCompleted():
-            print(self.game.displayGameState())
             print(f"Current player: {self.game.currentPlayer + 1}")
             (isHuman) = playerControls[self.game.currentPlayer]
             if isHuman:
                 move = self.get_user_move()
-                if move:
-                    self.game.makeMove(move)
+                if not move: continue
             else:
                 move = self.aiMove(self.game)
                 print(f"AI move: {move}")
-                self.game.makeMove(move)
-        print(self.game.displayBoardState())
+            # save previous board state and compare with new one
+            lastBoard = self.game.board.copy()
+            self.game.makeMove(move)
+            # print(self.game.displayGameState())
+            self.displayGameState(move, lastBoard)
         print(f"Player {self.game.currentPlayer + 1} wins!")
