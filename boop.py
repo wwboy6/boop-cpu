@@ -249,8 +249,8 @@ class Boop:
     # return the next action to win
     def checkImmediatelyWin(self) -> any:
         # return None
-        # current player need cat to win on next move
-        if self.players[self.currentPlayer].catCounts[1] == 0: return None
+        # current player need to place cat to win on next move
+        if self.playerState is not self.PlayerState.PLAY_CAT or self.players[self.currentPlayer].catCounts[1] == 0: return None
         # return cache if any
         if self.immediatelyWinningMove != None: return self.immediatelyWinningMove
         # filter pattern
@@ -344,14 +344,29 @@ class Boop:
 
     def evaluatePlayer(self, playerIndex: int) -> float:
         # game end score
+        isCurrentPlayer = playerIndex == self.currentPlayer
         # this happen only if opponent push player's cat to right position
         if self.playerState == self.PlayerState.FINISHED:
-            return self.evalScoreWin if playerIndex == self.currentPlayer else self.evalScoreLose
+            return self.evalScoreWin if isCurrentPlayer else self.evalScoreLose
         # FIXME: this approach is to check checkImmediatelyWin on evaluatePlayer only to avoid doing this in every step of searching
         # test if checking this in every step would have a better performance
         if self.checkImmediatelyWin() != None:
-            return self.evalScoreWin if self.currentPlayer == playerIndex else self.evalScoreLose
+            return self.evalScoreWin if isCurrentPlayer else self.evalScoreLose
         score = 0
+        # score for being current player
+        # this score is to balance the comparison of game state with different current player
+        # normally current player would have less score, and he can have at least some score to gain for a move
+        if isCurrentPlayer: score += min(self.evalScoreBoardKitten-self.evalScoreReserveKitten, self.evalScoreBoardCat-self.evalScoreReserveCat) + 2
+        # score of pieces in reserve
+        player = self.players[playerIndex]
+        rk, rc = player.catCounts
+        score += rk * self.evalScoreReserveKitten + rc * self.evalScoreReserveCat
+        # score of pieces on board
+        for i in range(self.boardSize * self.boardSize):
+            piece = self.board[i]
+            if piece // 2 == playerIndex:
+                base = self.evalScoreBoardKitten if piece % 2 == 0 else self.evalScoreBoardCat
+                score += base + self.evalScoreBoardPieceBonuses[i] * self.evalScoreBoardPieceBonusesMul[piece % 2]
         # if the next move is to promote, increase score by promotion
         if self.currentPlayer == playerIndex:
             match self.playerState:
@@ -362,13 +377,4 @@ class Boop:
                     maxCount = np.max(kittenCountInOption) if kittenCountInOption else 0
                     scoreIncreasment = max(0, maxCount*(self.evalScoreReserveCat-self.evalScoreBoardKitten)-(3-maxCount)*(self.evalScoreBoardCat))
                     score += scoreIncreasment
-
-        player = self.players[playerIndex]
-        rk, rc = player.catCounts
-        score += rk * self.evalScoreReserveKitten + rc * self.evalScoreReserveCat
-        for i in range(self.boardSize * self.boardSize):
-            piece = self.board[i]
-            if piece // 2 == playerIndex:
-                base = self.evalScoreBoardKitten if piece % 2 == 0 else self.evalScoreBoardCat
-                score += base + self.evalScoreBoardPieceBonuses[i] * self.evalScoreBoardPieceBonusesMul[piece % 2]
         return score
